@@ -8,8 +8,8 @@ O projeto conta com gravação automática de metadados oficiais **ID3v2** (Tít
 
 ## ⚡ Recursos Principais
 
-- 🎧 **YouTube & YouTube Music:** Baixe qualquer vídeo, Shorts ou playlist diretamente em MP3 320 kbps.
-- 🟢 **Spotify (Faixas, Álbuns e Playlists):** Extrai os metadados oficiais da faixa/playlist diretamente e converte para MP3 em alta fidelidade com capa oficial embutida (sem necessidade de contas de desenvolvedor ou tokens de API).
+- 🎧 **YouTube & YouTube Music:** Baixe qualquer vídeo, Shorts ou playlist diretamente em MP3 320 kbps (com suporte a autenticação por `cookies.txt`).
+- 🟢 **Spotify (Faixas, Álbuns e Playlists):** Extrai os metadados oficiais e converte para MP3 em alta fidelidade com capa oficial embutida. Conta com **fallback automático resiliente (SoundCloud)** caso o YouTube imponha restrição contra bots/cookies.
 - 🔍 **Busca por Nome:** Digite apenas o nome da música e o artista (ex: `Coldplay - Yellow`) para buscar e converter automaticamente.
 - 📁 **Conversão Local em Lote:** Converte arquivos de áudio locais (`.wav`, `.flac`, `.m4a`, `.aac`, `.ogg`, `.opus`, etc.) individuais ou pastas inteiras para MP3.
 - 🏷️ **Tags ID3 Completas:** Título, Artista, Álbum, Ano e Imagem da Capa frontal (Cover Art) são embutidos diretamente no arquivo.
@@ -138,6 +138,26 @@ python converter.py "C:\Users\Nome\Music\MinhaPastaSemMP3"
 ```bash
 python converter.py "https://open.spotify.com/track/..." -o "D:\Musicas" -b 256
 ```
+
+---
+
+##
+ 🍪 Solução para Bloqueio de Cookies do YouTube ("Sign in to confirm you're not a bot")
+
+O YouTube frequentemente impõe verificações contra bots quando muitas músicas são baixadas seguidas. O projeto já inclui duas proteções automáticas:
+
+1. **Fallback Automático (Spotify e buscas de áudio):** Se o YouTube bloquear o acesso, o conversor busca automaticamente a faixa no SoundCloud em alta fidelidade e preserva as capas e tags oficiais do Spotify!
+
+## Adicione seus prpios cookies
+2. **Suporte a `cookies.txt` (Para downloads diretos do YouTube):**
+   - Instale a extensão de navegador [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) (disponível para Chrome, Edge e Firefox).
+   - Entre no YouTube com sua conta logada.
+   - Abra a extensão e clique em **Export**.
+   - Salve o arquivo como `cookies.txt` na pasta raiz deste projeto:
+     ```text
+     SpotifyToMP3/cookies.txt
+     ```
+   - O conversor detectará o arquivo automaticamente ao ser iniciado!
 
 ---
 

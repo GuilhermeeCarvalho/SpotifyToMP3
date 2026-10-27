@@ -14,6 +14,7 @@ import yt_dlp
 import ffmpeg_utils
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, APIC, ID3NoHeaderError
+from ytdlp_utils import get_ytdlp_options, is_bot_or_cookie_error, print_cookie_help
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -115,8 +116,14 @@ def get_container_tracks(kind: str, item_id: str) -> tuple:
 
     return container_name, tracks
 
-def download_and_tag_track(track_info: dict, output_dir: str = "downloads", bitrate: str = "320") -> bool:
-    """Busca o áudio correspondente no YouTube, converte para MP3 320k e embute metadados ID3."""
+def download_and_tag_track(
+    track_info: dict, 
+    output_dir: str = "downloads", 
+    bitrate: str = "320",
+    cookies_file: str = None,
+    cookies_browser: str = None
+) -> bool:
+    """Busca o áudio correspondente no YouTube (com fallback para SoundCloud), converte para MP3 320k e embute metadados ID3."""
     os.makedirs(output_dir, exist_ok=True)
     title = track_info.get("title", "").strip()
     artist = track_info.get("artist", "").strip()
@@ -136,23 +143,43 @@ def download_and_tag_track(track_info: dict, output_dir: str = "downloads", bitr
 
     # Opções do yt-dlp para extração e codificação em MP3 320k
     clean_bitrate = str(bitrate).replace("k", "")
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': os.path.join(output_dir, f"{filename_base}.%(ext)s"),
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': clean_bitrate,
-        }],
-        'quiet': False,
-        'no_warnings': True,
-    }
+    ydl_opts = get_ytdlp_options(
+        outtmpl=os.path.join(output_dir, f"{filename_base}.%(ext)s"),
+        bitrate=clean_bitrate,
+        cookies_file=cookies_file,
+        cookies_browser=cookies_browser
+    )
 
+    download_success = False
+    bot_blocked = False
+
+    # 1. Tentativa primária no YouTube
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([f"ytsearch1:{query} audio"])
+            download_success = True
     except Exception as e:
-        print(f"[Spotify] Falha ao baixar áudio: {e}", file=sys.stderr)
+        err_str = str(e)
+        if is_bot_or_cookie_error(err_str):
+            bot_blocked = True
+            print(f"[Aviso] YouTube solicitou verificação contra bots.", file=sys.stderr)
+            print(f"[Spotify] Ativando fallback automático via SoundCloud para: '{query}'...")
+            try:
+                sc_opts = dict(ydl_opts)
+                sc_opts.pop('cookiefile', None)
+                sc_opts.pop('cookiesfrombrowser', None)
+                with yt_dlp.YoutubeDL(sc_opts) as sc_ydl:
+                    sc_ydl.download([f"scsearch1:{query}"])
+                    download_success = True
+                    print(f"[Spotify] Áudio obtido com sucesso via SoundCloud!")
+            except Exception as sc_err:
+                print(f"[Spotify] Fallback via SoundCloud também falhou: {sc_err}", file=sys.stderr)
+        else:
+            print(f"[Spotify] Falha ao baixar áudio: {e}", file=sys.stderr)
+
+    if not download_success:
+        if bot_blocked:
+            print_cookie_help()
         return False
 
     # Identificar o arquivo MP3 resultante
@@ -213,7 +240,13 @@ def download_and_tag_track(track_info: dict, output_dir: str = "downloads", bitr
         print(f"[Spotify] Erro ao gravar tags ID3: {e}", file=sys.stderr)
         return False
 
-def download_spotify(url: str, output_dir: str = "downloads", bitrate: str = "320") -> bool:
+def download_spotify(
+    url: str, 
+    output_dir: str = "downloads", 
+    bitrate: str = "320",
+    cookies_file: str = None,
+    cookies_browser: str = None
+) -> bool:
     """Ponto de entrada para qualquer link do Spotify (faixa, álbum ou playlist)."""
     kind, item_id = parse_spotify_url(url)
     if not kind or not item_id:
@@ -227,7 +260,13 @@ def download_spotify(url: str, output_dir: str = "downloads", bitrate: str = "32
             print(f"[Spotify] Erro ao obter dados da faixa no Spotify.", file=sys.stderr)
             return False
         print(f"[Spotify] Faixa encontrada: '{meta.get('artist')} - {meta.get('title')}'")
-        return download_and_tag_track(meta, output_dir=output_dir, bitrate=bitrate)
+        return download_and_tag_track(
+            meta, 
+            output_dir=output_dir, 
+            bitrate=bitrate,
+            cookies_file=cookies_file,
+            cookies_browser=cookies_browser
+        )
 
     elif kind in ("album", "playlist"):
         print(f"\n[Spotify] Analisando {kind}...")
@@ -240,7 +279,13 @@ def download_spotify(url: str, output_dir: str = "downloads", bitrate: str = "32
         success = 0
         for i, t in enumerate(tracks, 1):
             print(f"\n[{i}/{len(tracks)}] Processando: {t.get('artist')} - {t.get('title')}")
-            if download_and_tag_track(t, output_dir=output_dir, bitrate=bitrate):
+            if download_and_tag_track(
+                t, 
+                output_dir=output_dir, 
+                bitrate=bitrate,
+                cookies_file=cookies_file,
+                cookies_browser=cookies_browser
+            ):
                 success += 1
 
         print(f"\n[Spotify] Concluído! {success}/{len(tracks)} faixas convertidas com sucesso.")
